@@ -13,8 +13,30 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.EncodedKeySpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import javax.swing.JFileChooser;
 
 /**
  *
@@ -23,7 +45,6 @@ import javax.swing.ImageIcon;
 public class Main extends javax.swing.JFrame {
 
     private boolean isEncode = true;
-    private String previousCeasarPadding = "3";
     private Color blue = new Color(66, 133, 244);
     private Color defaultBackground = new javax.swing.JButton().getBackground();
     private Color defaultForeground = new javax.swing.JButton().getForeground();
@@ -53,12 +74,18 @@ public class Main extends javax.swing.JFrame {
         symmetricCopy.setFocusPainted(false);
         symmetricSecretKeyRandom.setFocusPainted(false);
         symmetricSaltPhraseRandom.setFocusPainted(false);
+        asymmetricPaste.setFocusPainted(false);
+        asymmetricCopyCipher.setFocusPainted(false);
+        symmetricPrimaryActionButton.setFocusPainted(false);
         ceasarPaddingInput.setText("3");
         /*
         * DISABLE OUTPUT TEXT AREA
          */
         ceasarOutputTextArea.setEditable(false);
         symmetricOutputTextArea.setEditable(false);
+        asymmetricOutputTextArea.setEditable(false);
+        asymmetricPrivateKeyTextArea.setEditable(false);
+        asymmetricPublicKeyTextArea.setEditable(false);
         /*
         * ENABLE LINE WRAPPING
          */
@@ -66,6 +93,10 @@ public class Main extends javax.swing.JFrame {
         ceasarOutputTextArea.setLineWrap(true);
         symmetricInputTextArea.setLineWrap(true);
         symmetricOutputTextArea.setLineWrap(true);
+        asymmetricInputTextArea.setLineWrap(true);
+        asymmetricOutputTextArea.setLineWrap(true);
+        asymmetricPrivateKeyTextArea.setLineWrap(true);
+        asymmetricPublicKeyTextArea.setLineWrap(true);
         /*
         * TEXTAREA's ON TEXT CHANGED LISTENERS
          */
@@ -97,11 +128,10 @@ public class Main extends javax.swing.JFrame {
                         showErrorMessage("Please enter number bigger than 0!");
                     } else if (input > 26) {
                         showErrorMessage("Please enter number not bigger than 26!");
-                    } else {
-                        caesarCipher();
                     }
-                } catch (HeadlessException | NumberFormatException ignore) {
+                } catch (HeadlessException | NumberFormatException ex) {
                     showErrorMessage("Please enter only number!");
+                    Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         });
@@ -121,22 +151,63 @@ public class Main extends javax.swing.JFrame {
                 caesarCipher();
             }
         });
-        symmetricInputTextArea.getDocument().addDocumentListener(new DocumentListener() {
+    }
 
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-            }
+    private void asymmetricRSA() {
+        if (asymmetricInputTextArea.getText().trim().equals("")) {
+            asymmetricOutputTextArea.setText("");
+            asymmetricPrivateKeyTextArea.setText("");
+            asymmetricPublicKeyTextArea.setText("");
+            return;
+        }
 
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                symmetricAES();
-            }
+        if (isEncode) {
+            try {
+                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+                generator.initialize(2048);
+                KeyPair pair = generator.generateKeyPair();
+                PrivateKey privateKey = pair.getPrivate();
+                PublicKey publicKey = pair.getPublic();
+                asymmetricPrivateKeyTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(privateKey.getEncoded()));
+                asymmetricPublicKeyTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(publicKey.getEncoded()));
 
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                symmetricAES();
+                Cipher encryptCipher = Cipher.getInstance("RSA");
+                encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
+                byte[] secretMessageBytes = asymmetricInputTextArea.getText().getBytes(StandardCharsets.UTF_8);
+                byte[] encryptedMessageBytes = encryptCipher.doFinal(secretMessageBytes);
+                asymmetricOutputTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(encryptedMessageBytes));
+            } catch (NoSuchPaddingException ex) {
+                showErrorMessage("Unable to encrypt the input due to padding issues!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (InvalidKeyException ex) {
+                showErrorMessage("Unable to encrypt the input due to invalid private key!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException ex) {
+                showErrorMessage("Unable to decrypt the provided input!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             }
-        });
+        } else {
+            try {
+                byte[] publicKeyBytes = Base64.getDecoder().decode(asymmetricPublicKeyTextArea.getText().getBytes(StandardCharsets.UTF_8));
+                KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+                EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
+                Cipher decryptCipher = Cipher.getInstance("RSA");
+                decryptCipher.init(Cipher.DECRYPT_MODE, keyFactory.generatePublic(publicKeySpec));
+                byte[] decryptedMessageBytes = decryptCipher.doFinal(Base64.getDecoder().decode(asymmetricInputTextArea.getText()));
+                String decryptedMessage = new String(decryptedMessageBytes, StandardCharsets.UTF_8);
+                asymmetricOutputTextArea.setText(decryptedMessage);
+            } catch (NoSuchPaddingException ex) {
+                showErrorMessage("Unable to decrypt the input due to padding issues!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (InvalidKeySpecException | InvalidKeyException ex) {
+                showErrorMessage("Unable to decrypt the input due to invalid private key!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException ex) {
+                showErrorMessage("Unable to decrypt the provided input!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
     }
 
     private void symmetricAES() {
@@ -153,9 +224,19 @@ public class Main extends javax.swing.JFrame {
             showErrorMessage("Invalid salt phrase value!");
         } else {
             if (isEncode) {
-                symmetricOutputTextArea.setText(AESEncode.get(plain, secretKey, saltPhrase));
+                String encode = AESEncode.get(plain, secretKey, saltPhrase);
+                if (encode == null) {
+                    showErrorMessage("Unable to encode the provided input!");
+                } else {
+                    symmetricOutputTextArea.setText(encode);
+                }
             } else {
-                symmetricOutputTextArea.setText(AESDecode.get(plain, secretKey, saltPhrase));
+                String decode = AESDecode.get(plain, secretKey, saltPhrase);
+                if (decode == null) {
+                    showErrorMessage("Unable to decode the provided input!");
+                } else {
+                    symmetricOutputTextArea.setText(decode);
+                }
             }
         }
     }
@@ -177,8 +258,9 @@ public class Main extends javax.swing.JFrame {
                     ceasarOutputTextArea.setText(CeasarCipher.encode(plain, -padding));
                 }
             }
-        } catch (Exception ignore) {
+        } catch (Exception ex) {
             showErrorMessage("Invalid padding value!");
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
@@ -234,13 +316,34 @@ public class Main extends javax.swing.JFrame {
         symmetricSaltPhraseInput = new javax.swing.JTextField();
         symmetricSecretKeyRandom = new javax.swing.JButton();
         symmetricSaltPhraseRandom = new javax.swing.JButton();
+        symmetricPrimaryActionButton = new javax.swing.JButton();
         asymmetric = new javax.swing.JPanel();
+        ceasar2 = new javax.swing.JPanel();
+        asymmetricOutputLabel = new javax.swing.JLabel();
+        asymmetricInputLabel = new javax.swing.JLabel();
+        jScrollPane5 = new javax.swing.JScrollPane();
+        asymmetricInputTextArea = new javax.swing.JTextArea();
+        jScrollPane6 = new javax.swing.JScrollPane();
+        asymmetricOutputTextArea = new javax.swing.JTextArea();
+        asymmetricPrivateKeyLabel = new javax.swing.JLabel();
+        ceasarInputPaste2 = new javax.swing.JButton();
+        asymmetricPaste = new javax.swing.JButton();
+        asymmetricCopyCipher = new javax.swing.JButton();
+        asymmetricPublicKeyLabel = new javax.swing.JLabel();
+        asymmetricPrimaryActionButton = new javax.swing.JButton();
+        asymmetricCopyPrivateKey = new javax.swing.JButton();
+        asymmetricCopyPublicKey = new javax.swing.JButton();
+        jScrollPane7 = new javax.swing.JScrollPane();
+        asymmetricPrivateKeyTextArea = new javax.swing.JTextArea();
+        jScrollPane8 = new javax.swing.JScrollPane();
+        asymmetricPublicKeyTextArea = new javax.swing.JTextArea();
         hybrid = new javax.swing.JPanel();
         decode = new javax.swing.JButton();
         encode = new javax.swing.JButton();
         settings = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setBackground(new java.awt.Color(255, 255, 255));
         setMinimumSize(new java.awt.Dimension(790, 500));
         addWindowListener(new java.awt.event.WindowAdapter() {
             public void windowOpened(java.awt.event.WindowEvent evt) {
@@ -250,15 +353,18 @@ public class Main extends javax.swing.JFrame {
 
         jPanel1.setLayout(new java.awt.BorderLayout());
 
-        jLabel1.setFont(new java.awt.Font("Source Code Pro", 1, 24)); // NOI18N
+        jLabel1.setFont(new java.awt.Font("Source Code Pro Black", 1, 24)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel1.setText("CRYPTOGRAPHY SYSTEM");
-        jLabel1.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(102, 102, 102)));
         jLabel1.setFocusable(false);
         jPanel1.add(jLabel1, java.awt.BorderLayout.CENTER);
         jLabel1.getAccessibleContext().setAccessibleDescription("");
 
         crypto.setTabPlacement(javax.swing.JTabbedPane.LEFT);
+        crypto.setToolTipText("");
+        crypto.setFocusable(false);
+        crypto.setFont(new java.awt.Font("Noto Sans", 1, 12)); // NOI18N
+        crypto.setName(""); // NOI18N
         crypto.addFocusListener(new java.awt.event.FocusAdapter() {
             public void focusGained(java.awt.event.FocusEvent evt) {
                 cryptoFocusGained(evt);
@@ -374,7 +480,7 @@ public class Main extends javax.swing.JFrame {
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addComponent(ceasarCopy, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(151, Short.MAX_VALUE))
+                .addContainerGap(51, Short.MAX_VALUE))
         );
         ceasarLayout.setVerticalGroup(
             ceasarLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -395,7 +501,7 @@ public class Main extends javax.swing.JFrame {
                 .addGroup(ceasarLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)
                     .addComponent(jScrollPane1))
-                .addContainerGap(35, Short.MAX_VALUE))
+                .addContainerGap(39, Short.MAX_VALUE))
         );
 
         crypto.addTab("Ceasar", ceasar);
@@ -518,47 +624,65 @@ public class Main extends javax.swing.JFrame {
             }
         });
 
+        symmetricPrimaryActionButton.setText("Encrypt");
+        symmetricPrimaryActionButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                symmetricPrimaryActionButtonMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                symmetricPrimaryActionButtonMouseExited(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                symmetricPrimaryActionButtonMousePressed(evt);
+            }
+        });
+
         javax.swing.GroupLayout ceasar1Layout = new javax.swing.GroupLayout(ceasar1);
         ceasar1.setLayout(ceasar1Layout);
         ceasar1Layout.setHorizontalGroup(
             ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(ceasar1Layout.createSequentialGroup()
-                .addGap(53, 53, 53)
-                .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar1Layout.createSequentialGroup()
-                        .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                            .addGroup(javax.swing.GroupLayout.Alignment.LEADING, ceasar1Layout.createSequentialGroup()
-                                .addComponent(symmetricSecretKeyLabel)
+                .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(ceasar1Layout.createSequentialGroup()
+                        .addGap(53, 53, 53)
+                        .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar1Layout.createSequentialGroup()
+                                .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, ceasar1Layout.createSequentialGroup()
+                                        .addComponent(symmetricSecretKeyLabel)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(symmetricSecretKeyInput))
+                                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, ceasar1Layout.createSequentialGroup()
+                                        .addComponent(symmetricInputLabel)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                        .addComponent(ceasarInputPaste1, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                                .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addGroup(ceasar1Layout.createSequentialGroup()
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(symmetricSecretKeyRandom))
+                                    .addGroup(ceasar1Layout.createSequentialGroup()
+                                        .addGap(26, 26, 26)
+                                        .addComponent(symmetricPaste)))))
+                        .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addGroup(ceasar1Layout.createSequentialGroup()
+                                .addGap(15, 15, 15)
+                                .addComponent(symmetricSaltPhraseLabel)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(symmetricSecretKeyInput))
-                            .addGroup(javax.swing.GroupLayout.Alignment.LEADING, ceasar1Layout.createSequentialGroup()
-                                .addComponent(symmetricInputLabel)
+                                .addComponent(symmetricSaltPhraseInput)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(symmetricSaltPhraseRandom))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar1Layout.createSequentialGroup()
+                                .addGap(12, 12, 12)
+                                .addComponent(symmetricOutputLabel)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(ceasarInputPaste1, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                .addComponent(symmetricCopy, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
                             .addGroup(ceasar1Layout.createSequentialGroup()
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(symmetricSecretKeyRandom))
-                            .addGroup(ceasar1Layout.createSequentialGroup()
-                                .addGap(26, 26, 26)
-                                .addComponent(symmetricPaste)))))
-                .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addGap(14, 14, 14)
+                                .addComponent(jScrollPane4, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE))))
                     .addGroup(ceasar1Layout.createSequentialGroup()
-                        .addGap(14, 14, 14)
-                        .addComponent(jScrollPane4, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(ceasar1Layout.createSequentialGroup()
-                        .addGap(15, 15, 15)
-                        .addComponent(symmetricSaltPhraseLabel)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(symmetricSaltPhraseInput)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(symmetricSaltPhraseRandom))
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar1Layout.createSequentialGroup()
-                        .addGap(12, 12, 12)
-                        .addComponent(symmetricOutputLabel)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(symmetricCopy, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                        .addGap(282, 282, 282)
+                        .addComponent(symmetricPrimaryActionButton, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap(151, Short.MAX_VALUE))
         );
         ceasar1Layout.setVerticalGroup(
@@ -582,8 +706,10 @@ public class Main extends javax.swing.JFrame {
                         .addComponent(symmetricOutputLabel)))
                 .addGap(9, 9, 9)
                 .addGroup(ceasar1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(jScrollPane4, javax.swing.GroupLayout.DEFAULT_SIZE, 255, Short.MAX_VALUE)
-                    .addComponent(jScrollPane3))
+                    .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 218, Short.MAX_VALUE)
+                    .addComponent(jScrollPane4))
+                .addGap(18, 18, 18)
+                .addComponent(symmetricPrimaryActionButton)
                 .addContainerGap(47, Short.MAX_VALUE))
         );
 
@@ -610,15 +736,226 @@ public class Main extends javax.swing.JFrame {
 
         crypto.addTab("Symmetric", symmetric);
 
+        ceasar2.setInheritsPopupMenu(true);
+        ceasar2.setPreferredSize(new java.awt.Dimension(778, 379));
+        ceasar2.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
+            public void mouseMoved(java.awt.event.MouseEvent evt) {
+                ceasar2MouseMoved(evt);
+            }
+        });
+
+        asymmetricOutputLabel.setText("Cipher Text:");
+
+        asymmetricInputLabel.setText("Plain Text:");
+
+        asymmetricInputTextArea.setColumns(20);
+        asymmetricInputTextArea.setRows(5);
+        asymmetricInputTextArea.addInputMethodListener(new java.awt.event.InputMethodListener() {
+            public void caretPositionChanged(java.awt.event.InputMethodEvent evt) {
+            }
+            public void inputMethodTextChanged(java.awt.event.InputMethodEvent evt) {
+                asymmetricInputTextAreaInputMethodTextChanged(evt);
+            }
+        });
+        jScrollPane5.setViewportView(asymmetricInputTextArea);
+
+        asymmetricOutputTextArea.setColumns(20);
+        asymmetricOutputTextArea.setRows(5);
+        jScrollPane6.setViewportView(asymmetricOutputTextArea);
+
+        asymmetricPrivateKeyLabel.setText("Private Key:");
+
+        ceasarInputPaste2.setText("Paste");
+        ceasarInputPaste2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                ceasarInputPaste2ActionPerformed(evt);
+            }
+        });
+
+        asymmetricPaste.setText("Paste");
+        asymmetricPaste.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                asymmetricPasteMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                asymmetricPasteMouseExited(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                asymmetricPasteMousePressed(evt);
+            }
+        });
+        asymmetricPaste.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                asymmetricPasteActionPerformed(evt);
+            }
+        });
+
+        asymmetricCopyCipher.setText("Copy");
+        asymmetricCopyCipher.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                asymmetricCopyCipherMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                asymmetricCopyCipherMouseExited(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                asymmetricCopyCipherMousePressed(evt);
+            }
+        });
+        asymmetricCopyCipher.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                asymmetricCopyCipherActionPerformed(evt);
+            }
+        });
+
+        asymmetricPublicKeyLabel.setText("Public Key:");
+
+        asymmetricPrimaryActionButton.setText("Encrypt");
+        asymmetricPrimaryActionButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                asymmetricPrimaryActionButtonMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                asymmetricPrimaryActionButtonMouseExited(evt);
+            }
+        });
+        asymmetricPrimaryActionButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                asymmetricPrimaryActionButtonActionPerformed(evt);
+            }
+        });
+
+        asymmetricCopyPrivateKey.setText("Copy");
+        asymmetricCopyPrivateKey.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPrivateKeyMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPrivateKeyMouseExited(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPrivateKeyMousePressed(evt);
+            }
+        });
+        asymmetricCopyPrivateKey.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                asymmetricCopyPrivateKeyActionPerformed(evt);
+            }
+        });
+
+        asymmetricCopyPublicKey.setText("Copy");
+        asymmetricCopyPublicKey.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPublicKeyMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPublicKeyMouseExited(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                asymmetricCopyPublicKeyMousePressed(evt);
+            }
+        });
+        asymmetricCopyPublicKey.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                asymmetricCopyPublicKeyActionPerformed(evt);
+            }
+        });
+
+        asymmetricPrivateKeyTextArea.setColumns(20);
+        asymmetricPrivateKeyTextArea.setRows(5);
+        jScrollPane7.setViewportView(asymmetricPrivateKeyTextArea);
+
+        asymmetricPublicKeyTextArea.setColumns(20);
+        asymmetricPublicKeyTextArea.setRows(5);
+        jScrollPane8.setViewportView(asymmetricPublicKeyTextArea);
+
+        javax.swing.GroupLayout ceasar2Layout = new javax.swing.GroupLayout(ceasar2);
+        ceasar2.setLayout(ceasar2Layout);
+        ceasar2Layout.setHorizontalGroup(
+            ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(ceasar2Layout.createSequentialGroup()
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(ceasar2Layout.createSequentialGroup()
+                        .addGap(164, 164, 164)
+                        .addComponent(ceasarInputPaste2, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(ceasar2Layout.createSequentialGroup()
+                        .addGap(42, 42, 42)
+                        .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(asymmetricPrivateKeyLabel)
+                            .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 280, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGroup(ceasar2Layout.createSequentialGroup()
+                                    .addComponent(asymmetricInputLabel)
+                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                    .addComponent(asymmetricPaste)))
+                            .addComponent(jScrollPane7, javax.swing.GroupLayout.DEFAULT_SIZE, 288, Short.MAX_VALUE))))
+                .addGap(29, 29, 29)
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addGroup(ceasar2Layout.createSequentialGroup()
+                        .addComponent(asymmetricOutputLabel)
+                        .addGap(134, 134, 134)
+                        .addComponent(asymmetricCopyCipher, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jScrollPane6)
+                    .addGroup(ceasar2Layout.createSequentialGroup()
+                        .addComponent(asymmetricPublicKeyLabel)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(asymmetricCopyPublicKey, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jScrollPane8))
+                .addGap(24, 24, 24))
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar2Layout.createSequentialGroup()
+                .addGap(0, 0, Short.MAX_VALUE)
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(asymmetricCopyPrivateKey, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(asymmetricPrimaryActionButton, javax.swing.GroupLayout.PREFERRED_SIZE, 181, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(226, 226, 226))
+        );
+        ceasar2Layout.setVerticalGroup(
+            ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(ceasar2Layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(asymmetricOutputLabel)
+                        .addComponent(asymmetricCopyCipher))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(asymmetricInputLabel)
+                        .addComponent(asymmetricPaste)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 22, Short.MAX_VALUE)
+                .addComponent(ceasarInputPaste2, javax.swing.GroupLayout.PREFERRED_SIZE, 0, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(jScrollPane6, javax.swing.GroupLayout.DEFAULT_SIZE, 107, Short.MAX_VALUE)
+                    .addComponent(jScrollPane5))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(asymmetricPrimaryActionButton, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(asymmetricPublicKeyLabel)
+                    .addComponent(asymmetricPrivateKeyLabel)
+                    .addComponent(asymmetricCopyPrivateKey)
+                    .addComponent(asymmetricCopyPublicKey))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(ceasar2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPane7, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap(41, Short.MAX_VALUE))
+        );
+
         javax.swing.GroupLayout asymmetricLayout = new javax.swing.GroupLayout(asymmetric);
         asymmetric.setLayout(asymmetricLayout);
         asymmetricLayout.setHorizontalGroup(
             asymmetricLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 778, Short.MAX_VALUE)
+            .addGroup(asymmetricLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(ceasar2, javax.swing.GroupLayout.PREFERRED_SIZE, 655, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         asymmetricLayout.setVerticalGroup(
             asymmetricLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 367, Short.MAX_VALUE)
+            .addGroup(asymmetricLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(ceasar2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         crypto.addTab("Asymmetric", asymmetric);
@@ -627,7 +964,7 @@ public class Main extends javax.swing.JFrame {
         hybrid.setLayout(hybridLayout);
         hybridLayout.setHorizontalGroup(
             hybridLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 778, Short.MAX_VALUE)
+            .addGap(0, 678, Short.MAX_VALUE)
         );
         hybridLayout.setVerticalGroup(
             hybridLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -675,17 +1012,16 @@ public class Main extends javax.swing.JFrame {
             .addGroup(layout.createSequentialGroup()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .addComponent(crypto))
-                    .addGroup(layout.createSequentialGroup()
                         .addGap(156, 156, 156)
                         .addComponent(encode)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(decode)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(settings)
-                        .addGap(0, 0, Short.MAX_VALUE)))
-                .addContainerGap())
+                        .addComponent(settings))
+                    .addGroup(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(crypto, javax.swing.GroupLayout.PREFERRED_SIZE, 775, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(9, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -693,12 +1029,12 @@ public class Main extends javax.swing.JFrame {
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(settings, javax.swing.GroupLayout.DEFAULT_SIZE, 26, Short.MAX_VALUE)
                     .addComponent(encode, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(decode, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(decode, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(settings, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(crypto, javax.swing.GroupLayout.PREFERRED_SIZE, 367, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(62, Short.MAX_VALUE))
+                .addGap(64, 64, 64))
         );
 
         pack();
@@ -721,18 +1057,36 @@ public class Main extends javax.swing.JFrame {
         encode.setForeground(defaultForeground);
 
         int index = crypto.getSelectedIndex();
-        if (index == 0) {
-            ceasarInputText.setText("Cipher Text:");
-            ceasarOutputLabel.setText("Plain Text:");
-            ceasarInputTextArea.setText("");
-            ceasarOutputTextArea.setText("");
-            caesarCipher();
-        } else if (index == 1) {
-            symmetricInputLabel.setText("Cipher Text:");
-            symmetricOutputLabel.setText("Plain Text:");
-            symmetricInputTextArea.setText("");
-            symmetricOutputTextArea.setText("");
-            symmetricAES();
+        switch (index) {
+            case 0 -> {
+                ceasarInputText.setText("Cipher Text:");
+                ceasarOutputLabel.setText("Plain Text:");
+                ceasarInputTextArea.setText("");
+                ceasarOutputTextArea.setText("");
+            }
+            case 1 -> {
+                symmetricInputLabel.setText("Cipher Text:");
+                symmetricOutputLabel.setText("Plain Text:");
+                symmetricInputTextArea.setText("");
+                symmetricOutputTextArea.setText("");
+                symmetricSecretKeyRandom.setVisible(false);
+                symmetricSaltPhraseRandom.setVisible(false);
+                symmetricPrimaryActionButton.setText("Decrypt");
+            }
+            case 2 -> {
+                asymmetricInputLabel.setText("Cipher Text:");
+                asymmetricOutputLabel.setText("Plain Text:");
+                asymmetricPrimaryActionButton.setText("Decrypt");
+                asymmetricPublicKeyTextArea.setEditable(true);
+                asymmetricPrivateKeyLabel.setVisible(false);
+                asymmetricCopyPrivateKey.setVisible(false);
+                asymmetricPrivateKeyTextArea.setVisible(false);
+                asymmetricInputTextArea.setText("");
+                asymmetricOutputTextArea.setText("");
+                asymmetricPrivateKeyTextArea.setText("");
+            }
+            default -> {
+            }
         }
     }//GEN-LAST:event_decodeActionPerformed
 
@@ -749,18 +1103,36 @@ public class Main extends javax.swing.JFrame {
         decode.setForeground(defaultForeground);
 
         int index = crypto.getSelectedIndex();
-        if (index == 0) {
-            ceasarInputText.setText("Plain Text:");
-            ceasarOutputLabel.setText("Cipher Text:");
-            ceasarInputTextArea.setText("");
-            ceasarOutputTextArea.setText("");
-            caesarCipher();
-        } else if (index == 1) {
-            symmetricInputLabel.setText("Plain Text:");
-            symmetricOutputLabel.setText("Cipher Text:");
-            symmetricInputTextArea.setText("");
-            symmetricOutputTextArea.setText("");
-            symmetricAES();
+        switch (index) {
+            case 0 -> {
+                ceasarInputText.setText("Plain Text:");
+                ceasarOutputLabel.setText("Cipher Text:");
+                ceasarInputTextArea.setText("");
+                ceasarOutputTextArea.setText("");
+            }
+            case 1 -> {
+                symmetricInputLabel.setText("Plain Text:");
+                symmetricOutputLabel.setText("Cipher Text:");
+                symmetricInputTextArea.setText("");
+                symmetricOutputTextArea.setText("");
+                symmetricSecretKeyRandom.setVisible(true);
+                symmetricSaltPhraseRandom.setVisible(true);
+                symmetricPrimaryActionButton.setText("Encrypt");
+            }
+            case 2 -> {
+                asymmetricInputLabel.setText("Plain Text:");
+                asymmetricOutputLabel.setText("Cipher Text:");
+                asymmetricPrimaryActionButton.setText("Encrypt");
+                asymmetricPublicKeyTextArea.setEditable(false);
+                asymmetricPrivateKeyLabel.setVisible(true);
+                asymmetricCopyPrivateKey.setVisible(true);
+                asymmetricPrivateKeyTextArea.setVisible(true);
+                asymmetricInputTextArea.setText("");
+                asymmetricOutputTextArea.setText("");
+                asymmetricPrivateKeyTextArea.setText("");
+            }
+            default -> {
+            }
         }
     }//GEN-LAST:event_encodeActionPerformed
 
@@ -818,7 +1190,8 @@ public class Main extends javax.swing.JFrame {
         }
         try {
             ceasarInputTextArea.setText((String) t.getTransferData(DataFlavor.stringFlavor));
-        } catch (Exception ignore) {
+        } catch (Exception ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_ceasarPasteMousePressed
 
@@ -918,7 +1291,8 @@ public class Main extends javax.swing.JFrame {
         }
         try {
             symmetricInputTextArea.setText((String) t.getTransferData(DataFlavor.stringFlavor));
-        } catch (Exception ignore) {
+        } catch (Exception ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_symmetricPasteMousePressed
 
@@ -947,6 +1321,133 @@ public class Main extends javax.swing.JFrame {
     private void symmetricInputTextAreaInputMethodTextChanged(java.awt.event.InputMethodEvent evt) {//GEN-FIRST:event_symmetricInputTextAreaInputMethodTextChanged
         // TODO add your handling code here:
     }//GEN-LAST:event_symmetricInputTextAreaInputMethodTextChanged
+
+    private void asymmetricInputTextAreaInputMethodTextChanged(java.awt.event.InputMethodEvent evt) {//GEN-FIRST:event_asymmetricInputTextAreaInputMethodTextChanged
+        // TODO add your handling code here:
+    }//GEN-LAST:event_asymmetricInputTextAreaInputMethodTextChanged
+
+    private void ceasarInputPaste2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ceasarInputPaste2ActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_ceasarInputPaste2ActionPerformed
+
+    private void asymmetricPasteMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricPasteMouseEntered
+        asymmetricPaste.setBackground(blue);
+        asymmetricPaste.setForeground(Color.WHITE);
+    }//GEN-LAST:event_asymmetricPasteMouseEntered
+
+    private void asymmetricPasteMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricPasteMouseExited
+        asymmetricPaste.setBackground(defaultBackground);
+        asymmetricPaste.setForeground(defaultForeground);
+    }//GEN-LAST:event_asymmetricPasteMouseExited
+
+    private void asymmetricPasteMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricPasteMousePressed
+        Clipboard c = Toolkit.getDefaultToolkit().getSystemClipboard();
+        Transferable t = c.getContents(this);
+        if (t == null) {
+            return;
+        }
+        try {
+            asymmetricInputTextArea.setText((String) t.getTransferData(DataFlavor.stringFlavor));
+        } catch (Exception ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }//GEN-LAST:event_asymmetricPasteMousePressed
+
+    private void asymmetricPasteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_asymmetricPasteActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_asymmetricPasteActionPerformed
+
+    private void asymmetricCopyCipherMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyCipherMouseEntered
+        asymmetricCopyCipher.setBackground(blue);
+        asymmetricCopyCipher.setForeground(Color.WHITE);
+    }//GEN-LAST:event_asymmetricCopyCipherMouseEntered
+
+    private void asymmetricCopyCipherMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyCipherMouseExited
+        asymmetricCopyCipher.setBackground(defaultBackground);
+        asymmetricCopyCipher.setForeground(defaultForeground);
+    }//GEN-LAST:event_asymmetricCopyCipherMouseExited
+
+    private void asymmetricCopyCipherMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyCipherMousePressed
+        StringSelection stringSelection = new StringSelection(asymmetricOutputTextArea.getText());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
+    }//GEN-LAST:event_asymmetricCopyCipherMousePressed
+
+    private void asymmetricCopyCipherActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_asymmetricCopyCipherActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_asymmetricCopyCipherActionPerformed
+
+    private void ceasar2MouseMoved(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_ceasar2MouseMoved
+        // TODO add your handling code here:
+    }//GEN-LAST:event_ceasar2MouseMoved
+
+    private void asymmetricCopyPrivateKeyMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPrivateKeyMouseEntered
+        asymmetricCopyPrivateKey.setBackground(blue);
+        asymmetricCopyPrivateKey.setForeground(Color.WHITE);
+    }//GEN-LAST:event_asymmetricCopyPrivateKeyMouseEntered
+
+    private void asymmetricCopyPrivateKeyMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPrivateKeyMouseExited
+        asymmetricCopyPrivateKey.setBackground(defaultBackground);
+        asymmetricCopyPrivateKey.setForeground(defaultForeground);
+    }//GEN-LAST:event_asymmetricCopyPrivateKeyMouseExited
+
+    private void asymmetricCopyPrivateKeyMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPrivateKeyMousePressed
+        StringSelection stringSelection = new StringSelection(asymmetricPrivateKeyTextArea.getText());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
+    }//GEN-LAST:event_asymmetricCopyPrivateKeyMousePressed
+
+    private void asymmetricCopyPrivateKeyActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_asymmetricCopyPrivateKeyActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_asymmetricCopyPrivateKeyActionPerformed
+
+    private void asymmetricCopyPublicKeyMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPublicKeyMouseEntered
+        asymmetricCopyPublicKey.setBackground(blue);
+        asymmetricCopyPublicKey.setForeground(Color.WHITE);
+    }//GEN-LAST:event_asymmetricCopyPublicKeyMouseEntered
+
+    private void asymmetricCopyPublicKeyMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPublicKeyMouseExited
+        asymmetricCopyPublicKey.setBackground(defaultBackground);
+        asymmetricCopyPublicKey.setForeground(defaultForeground);
+    }//GEN-LAST:event_asymmetricCopyPublicKeyMouseExited
+
+    private void asymmetricCopyPublicKeyMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricCopyPublicKeyMousePressed
+        StringSelection stringSelection = new StringSelection(asymmetricPublicKeyTextArea.getText());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
+    }//GEN-LAST:event_asymmetricCopyPublicKeyMousePressed
+
+    private void asymmetricCopyPublicKeyActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_asymmetricCopyPublicKeyActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_asymmetricCopyPublicKeyActionPerformed
+
+    private void symmetricPrimaryActionButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_symmetricPrimaryActionButtonMouseEntered
+        symmetricPrimaryActionButton.setBackground(blue);
+        symmetricPrimaryActionButton.setForeground(Color.WHITE);
+    }//GEN-LAST:event_symmetricPrimaryActionButtonMouseEntered
+
+    private void symmetricPrimaryActionButtonMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_symmetricPrimaryActionButtonMouseExited
+        symmetricPrimaryActionButton.setBackground(defaultBackground);
+        symmetricPrimaryActionButton.setForeground(defaultForeground);
+    }//GEN-LAST:event_symmetricPrimaryActionButtonMouseExited
+
+    private void symmetricPrimaryActionButtonMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_symmetricPrimaryActionButtonMousePressed
+        symmetricAES();
+    }//GEN-LAST:event_symmetricPrimaryActionButtonMousePressed
+
+    private void asymmetricPrimaryActionButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_asymmetricPrimaryActionButtonActionPerformed
+        asymmetricRSA();
+    }//GEN-LAST:event_asymmetricPrimaryActionButtonActionPerformed
+
+    private void asymmetricPrimaryActionButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricPrimaryActionButtonMouseEntered
+        asymmetricPrimaryActionButton.setBackground(blue);
+        asymmetricPrimaryActionButton.setForeground(Color.WHITE);
+    }//GEN-LAST:event_asymmetricPrimaryActionButtonMouseEntered
+
+    private void asymmetricPrimaryActionButtonMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_asymmetricPrimaryActionButtonMouseExited
+        asymmetricPrimaryActionButton.setBackground(defaultBackground);
+        asymmetricPrimaryActionButton.setForeground(defaultForeground);
+    }//GEN-LAST:event_asymmetricPrimaryActionButtonMouseExited
 
     /**
      * @param args the command line arguments
@@ -985,12 +1486,27 @@ public class Main extends javax.swing.JFrame {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel asymmetric;
+    private javax.swing.JButton asymmetricCopyCipher;
+    private javax.swing.JButton asymmetricCopyPrivateKey;
+    private javax.swing.JButton asymmetricCopyPublicKey;
+    private javax.swing.JLabel asymmetricInputLabel;
+    private javax.swing.JTextArea asymmetricInputTextArea;
+    private javax.swing.JLabel asymmetricOutputLabel;
+    private javax.swing.JTextArea asymmetricOutputTextArea;
+    private javax.swing.JButton asymmetricPaste;
+    private javax.swing.JButton asymmetricPrimaryActionButton;
+    private javax.swing.JLabel asymmetricPrivateKeyLabel;
+    private javax.swing.JTextArea asymmetricPrivateKeyTextArea;
+    private javax.swing.JLabel asymmetricPublicKeyLabel;
+    private javax.swing.JTextArea asymmetricPublicKeyTextArea;
     private javax.swing.ButtonGroup buttonGroup1;
     private javax.swing.JPanel ceasar;
     private javax.swing.JPanel ceasar1;
+    private javax.swing.JPanel ceasar2;
     private javax.swing.JButton ceasarCopy;
     private javax.swing.JButton ceasarInputPaste;
     private javax.swing.JButton ceasarInputPaste1;
+    private javax.swing.JButton ceasarInputPaste2;
     private javax.swing.JLabel ceasarInputText;
     private javax.swing.JTextArea ceasarInputTextArea;
     private javax.swing.JLabel ceasarOutputLabel;
@@ -1008,6 +1524,10 @@ public class Main extends javax.swing.JFrame {
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JScrollPane jScrollPane4;
+    private javax.swing.JScrollPane jScrollPane5;
+    private javax.swing.JScrollPane jScrollPane6;
+    private javax.swing.JScrollPane jScrollPane7;
+    private javax.swing.JScrollPane jScrollPane8;
     private javax.swing.JButton settings;
     private javax.swing.JPanel symmetric;
     private javax.swing.JButton symmetricCopy;
@@ -1016,6 +1536,7 @@ public class Main extends javax.swing.JFrame {
     private javax.swing.JLabel symmetricOutputLabel;
     private javax.swing.JTextArea symmetricOutputTextArea;
     private javax.swing.JButton symmetricPaste;
+    private javax.swing.JButton symmetricPrimaryActionButton;
     private javax.swing.JTextField symmetricSaltPhraseInput;
     private javax.swing.JLabel symmetricSaltPhraseLabel;
     private javax.swing.JButton symmetricSaltPhraseRandom;

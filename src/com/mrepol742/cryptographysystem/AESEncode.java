@@ -10,7 +10,7 @@ import javax.crypto.Cipher;
 public class AESEncode {
     public static String get(String str, String key, String saltPhase) {
         try {
-           return Base64.getEncoder().encodeToString(AESCipher.get(key, saltPhase, Cipher.ENCRYPT_MODE).doFinal(str.getBytes(StandardCharsets.UTF_8)));
+           return Base64.getEncoder().withoutPadding().encodeToString(AESCipher.get(key, saltPhase, Cipher.ENCRYPT_MODE).doFinal(str.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
         }
         return null;

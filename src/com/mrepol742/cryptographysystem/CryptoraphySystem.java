@@ -1,5 +1,11 @@
 package com.mrepol742.cryptographysystem;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+
 /**
  *
  * @author mrepol742
@@ -7,18 +13,22 @@ package com.mrepol742.cryptographysystem;
 public class CryptoraphySystem {
 
     public static void main(String[] args) {
+
         sleepThread();
 
         java.awt.EventQueue.invokeLater(() -> {
-            new Main().setVisible(true);
+            try {
+                UIManager.setLookAndFeel(new FlatDarkLaf());
+                new Main().setVisible(true);
+            } catch (UnsupportedLookAndFeelException ex) {
+            }
         });
     }
 
     private static void sleepThread() {
         try {
-            Thread.sleep(5000);
+            Thread.sleep(2000);
         } catch (InterruptedException ex) {
-            System.out.println(ex.toString());
         }
     }
 }
