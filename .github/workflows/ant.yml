@@ -20,7 +20,7 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
     - name: Build with Ant
-      run: ant -noinput -buildfile build.xml -f src_dir -Dnb.internal.action.name=build jar
+      run: ant -noinput -buildfile build.xml
     - name: Prepare for released
       run: |
         mkdir CryptographySystem
