@@ -14,7 +14,7 @@ public class CryptoraphySystem {
 
     public static void main(String[] args) {
 
-        sleepThread();
+       // sleepThread();
 
         java.awt.EventQueue.invokeLater(() -> {
             try {
