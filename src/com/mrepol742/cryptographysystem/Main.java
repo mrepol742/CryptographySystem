@@ -45,7 +45,6 @@ import javax.swing.JOptionPane;
 import javax.swing.ProgressMonitor;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import org.apache.tika.Tika;
 
 /**
  *

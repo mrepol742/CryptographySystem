@@ -1,3 +1,5 @@
 Manifest-Version: 1.0
-X-COMMENT: Main-Class will be added automatically by build
+Created-by: Melvin Jones Repol
+Country: PH
+Website: https://mrepol742.github.io
 SplashScreen-Image: src/com/mrepol742/cryptographysystem/icon.png
