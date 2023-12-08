@@ -25,6 +25,8 @@ jobs:
       run: |
         rm -rf dist/javadoc
         mv dist CryptograhySystem
+        ls
+        cd CryptograhySystem && ls
     - name: Push to released Repository
       id: push_directory
       uses: cpina/github-action-push-to-another-repository@main
