@@ -21,12 +21,6 @@ jobs:
         distribution: 'temurin'
     - name: Build with Ant
       run: ant -noinput -buildfile build.xml
-    - name: Prepare for released
-      run: |
-        rm -rf dist/javadoc
-        mv dist CryptograhySystem
-        ls
-        cd CryptograhySystem && ls
     - name: Push to released Repository
       id: push_directory
       uses: cpina/github-action-push-to-another-repository@main
@@ -34,7 +28,7 @@ jobs:
         API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
       with:
         target-directory: CryptographySystem
-        source-directory: CryptographySystem
+        source-directory: dist
         destination-github-username: 'mrepol742'
         destination-repository-name: 'released'
         user-email: mrepol742@gmail.com
