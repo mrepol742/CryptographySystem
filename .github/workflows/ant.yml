@@ -23,7 +23,6 @@ jobs:
       run: ant -noinput -buildfile build.xml
     - name: Prepare for released
       run: |
-        mkdir CryptographySystem
         rm -rf dist/javadoc
         mv dist CryptograhySystem
     - name: Push to released Repository
@@ -32,6 +31,7 @@ jobs:
       env:
         API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
       with:
+        target-directory: CryptographySystem
         source-directory: CryptographySystem
         destination-github-username: 'mrepol742'
         destination-repository-name: 'released'
