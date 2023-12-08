@@ -20,11 +20,12 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
     - name: Build with Ant
-      run: ant -noinput -buildfile build.xml
+      run: ant -noinput -buildfile build.xml -f src_dir -Dnb.internal.action.name=build jar
     - name: Prepare for released
       run: |
         mkdir CryptographySystem
-        mv dist /CryptograhySystem/
+        rm -rf dist/javadoc
+        mv dist CryptograhySystem
     - name: Push to released Repository
       id: push_directory
       uses: cpina/github-action-push-to-another-repository@main
