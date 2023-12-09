@@ -15,6 +15,9 @@ import javax.imageio.ImageIO;
  * @author mrepol742
  */
 public class ImageUtil {
+    
+    private ImageUtil() {
+    }
 
     public static String imgToBase64String(final RenderedImage img, final String formatName) throws IOException {
         final ByteArrayOutputStream os = new ByteArrayOutputStream();

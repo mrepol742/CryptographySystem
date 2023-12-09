@@ -24,6 +24,7 @@ public class EncryptedFile {
             mimetype = Files.probeContentType(selectedFile.toPath()).split("/")[0];
             String[] split = selectedFile.getName().split("\\.");
             fileFormat = split[split.length -1];
+            Logger.getLogger(Main.class.getName()).log(Level.INFO, "Selected File: {0}\nMimetype: {1}\nFile Format:{2}", new Object[]{selectedFile.getName(), mimetype, fileFormat});
         } catch (IOException ex) {
             Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }

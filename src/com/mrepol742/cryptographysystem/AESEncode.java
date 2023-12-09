@@ -10,6 +10,10 @@ import javax.crypto.Cipher;
  * @author mrepol742
  */
 public class AESEncode {
+    
+    private AESEncode() {
+    }
+    
     public static String get(String str, String key, String saltPhase) {
         try {
             byte[] str1 = AESCipher.get(key, saltPhase, Cipher.ENCRYPT_MODE).doFinal(str.getBytes(StandardCharsets.UTF_8));

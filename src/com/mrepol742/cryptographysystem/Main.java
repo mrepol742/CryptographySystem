@@ -139,8 +139,10 @@ public class Main extends javax.swing.JFrame {
 
                     if (input <= 0) {
                         showErrorMessage("Please enter number bigger than 0!");
+                        Logger.getLogger(Main.class.getName()).log(Level.INFO, "Invalid padding value: {0}", input);
                     } else if (input > 26) {
                         showErrorMessage("Please enter number not bigger than 26!");
+                        Logger.getLogger(Main.class.getName()).log(Level.INFO, "Invalid padding value: {0}", input);
                     }
                 } catch (HeadlessException | NumberFormatException ex) {
                     showErrorMessage("Please enter only number!");
@@ -176,46 +178,40 @@ public class Main extends javax.swing.JFrame {
 
         if (isEncode) {
             try {
-                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-                generator.initialize(2048);
-                KeyPair pair = generator.generateKeyPair();
-                PrivateKey privateKey = pair.getPrivate();
-                PublicKey publicKey = pair.getPublic();
-                asymmetricPrivateKeyTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(privateKey.getEncoded()));
-                asymmetricPublicKeyTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(publicKey.getEncoded()));
+                RSACipher encryptMode = RSAEncode.get(asymmetricInputTextArea.getText());
 
-                Cipher encryptCipher = Cipher.getInstance("RSA");
-                encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
-                byte[] secretMessageBytes = asymmetricInputTextArea.getText().getBytes(StandardCharsets.UTF_8);
-                byte[] encryptedMessageBytes = encryptCipher.doFinal(secretMessageBytes);
-                asymmetricOutputTextArea.setText(Base64.getEncoder().withoutPadding().encodeToString(encryptedMessageBytes));
+                asymmetricPrivateKeyTextArea.setText(encryptMode.getPrivateKey());
+                asymmetricPublicKeyTextArea.setText(encryptMode.getPublickKey());
+                asymmetricOutputTextArea.setText(encryptMode.getContent());
+
             } catch (NoSuchPaddingException ex) {
                 showErrorMessage("Unable to encrypt the input due to padding issues!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             } catch (InvalidKeyException ex) {
                 showErrorMessage("Unable to encrypt the input due to invalid private key!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException ex) {
-                showErrorMessage("Unable to decrypt the provided input!");
+            } catch (IllegalBlockSizeException ex) {
+                showErrorMessage("Maximum block size of 256! Please reduce the input text or use Hybrid!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (NoSuchAlgorithmException | BadPaddingException ex) {
+                showErrorMessage("Unable to encrypt the provided input!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             }
         } else {
             try {
-                byte[] publicKeyBytes = Base64.getDecoder().decode(asymmetricPublicKeyTextArea.getText().getBytes(StandardCharsets.UTF_8));
-                KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-                EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(publicKeyBytes);
-                Cipher decryptCipher = Cipher.getInstance("RSA");
-                decryptCipher.init(Cipher.DECRYPT_MODE, keyFactory.generatePublic(publicKeySpec));
-                byte[] decryptedMessageBytes = decryptCipher.doFinal(Base64.getDecoder().decode(asymmetricInputTextArea.getText()));
-                String decryptedMessage = new String(decryptedMessageBytes, StandardCharsets.UTF_8);
-                asymmetricOutputTextArea.setText(decryptedMessage);
+                String decryptMode = RSADecode.get(asymmetricPublicKeyTextArea.getText(),
+                        asymmetricInputTextArea.getText());
+                asymmetricOutputTextArea.setText(decryptMode);
             } catch (NoSuchPaddingException ex) {
                 showErrorMessage("Unable to decrypt the input due to padding issues!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             } catch (InvalidKeySpecException | InvalidKeyException ex) {
                 showErrorMessage("Unable to decrypt the input due to invalid private key!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (NoSuchAlgorithmException | IllegalBlockSizeException | BadPaddingException ex) {
+            } catch (IllegalBlockSizeException ex) {
+                showErrorMessage("Maximum block size of 256! Please reduce the input text or use Hybrid!");
+                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (NoSuchAlgorithmException | BadPaddingException ex) {
                 showErrorMessage("Unable to decrypt the provided input!");
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -233,13 +229,16 @@ public class Main extends javax.swing.JFrame {
         String saltPhrase = symmetricSaltPhraseInput.getText();
         if (secretKey.trim().isEmpty()) {
             showErrorMessage("Invalid secret key value!");
+            Logger.getLogger(Main.class.getName()).log(Level.INFO, "Invalid secret key value");
         } else if (saltPhrase.trim().isEmpty()) {
             showErrorMessage("Invalid salt phrase value!");
+            Logger.getLogger(Main.class.getName()).log(Level.INFO, "Invalid salt phrase value");
         } else {
             if (isEncode) {
                 String encode = AESEncode.get(plain, secretKey, saltPhrase);
                 if (encode == null) {
                     showErrorMessage("Unable to encode the provided input!");
+                    Logger.getLogger(Main.class.getName()).log(Level.INFO, "Unable to encode!");
                 } else {
                     symmetricOutputTextArea.setText(encode);
                 }
@@ -247,6 +246,7 @@ public class Main extends javax.swing.JFrame {
                 String decode = AESDecode.get(plain, secretKey, saltPhrase);
                 if (decode == null) {
                     showErrorMessage("Unable to decode the provided input!");
+                    Logger.getLogger(Main.class.getName()).log(Level.INFO, "Unable to decode!");
                 } else {
                     symmetricOutputTextArea.setText(decode);
                 }
@@ -264,6 +264,7 @@ public class Main extends javax.swing.JFrame {
             int padding = Integer.parseInt(ceasarPaddingInput.getText());
             if (padding <= 0 || padding > 26) {
                 showErrorMessage("Invalid padding value!");
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Invalid padding value: {0}", padding);
             } else {
                 if (isEncode) {
                     ceasarOutputTextArea.setText(CeasarCipher.encode(plain, padding));
@@ -1453,6 +1454,7 @@ public class Main extends javax.swing.JFrame {
                 ceasarInputTextArea.setText("");
                 ceasarOutputTextArea.setText("");
                 actionType = null;
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Decode Action Peformed: CEASAR");
             }
             case 1 -> {
                 symmetricInputLabel.setText("Cipher Text:");
@@ -1467,6 +1469,7 @@ public class Main extends javax.swing.JFrame {
                 symmetricSaveFileTextField.setText("");
                 encryptedFile = null;
                 actionType = "SYMMETRIC";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Decode Action Peformed: SYMMETRIC");
             }
             case 2 -> {
                 asymmetricInputLabel.setText("Cipher Text:");
@@ -1481,10 +1484,12 @@ public class Main extends javax.swing.JFrame {
                 asymmetricPrivateKeyTextArea.setText("");
                 encryptedFile = null;
                 actionType = "ASYMMETRIC";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Decode Action Peformed: ASYMMETRIC");
             }
             case 3 -> {
                 encryptedFile = null;
                 actionType = "HYBRID";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Decode Action Peformed: HYBRID");
             }
             default -> {
             }
@@ -1510,6 +1515,7 @@ public class Main extends javax.swing.JFrame {
                 ceasarInputTextArea.setText("");
                 ceasarOutputTextArea.setText("");
                 actionType = null;
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Encode Action Peformed: CEASAR");
             }
             case 1 -> {
                 symmetricInputLabel.setText("Plain Text:");
@@ -1524,6 +1530,7 @@ public class Main extends javax.swing.JFrame {
                 symmetricSaveFileTextField.setText("");
                 encryptedFile = null;
                 actionType = "SYMMETRIC";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Encode Action Peformed: SYMMETRIC");
             }
             case 2 -> {
                 asymmetricInputLabel.setText("Plain Text:");
@@ -1538,10 +1545,12 @@ public class Main extends javax.swing.JFrame {
                 asymmetricPrivateKeyTextArea.setText("");
                 encryptedFile = null;
                 actionType = "ASYMMETRIC";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Encode Action Peformed: ASYMMETRIC");
             }
             case 3 -> {
                 encryptedFile = null;
                 actionType = "HYBRID";
+                Logger.getLogger(Main.class.getName()).log(Level.INFO, "Encode Action Peformed: HYBRID");
             }
             default -> {
             }
@@ -1755,6 +1764,7 @@ public class Main extends javax.swing.JFrame {
             decodeActionPerformed(null);
         }
         int index = crypto.getSelectedIndex();
+
         switch (index) {
             case 0 -> {
                 ceasarPaddingInput.setText("3");
@@ -1877,10 +1887,10 @@ public class Main extends javax.swing.JFrame {
         JFileChooser jfileChooser = new JFileChooser();
         int result = jfileChooser.showOpenDialog(this);
         jfileChooser.setCurrentDirectory(new File(System.getProperty("user.home")));
-        encryptedFile = new EncryptedFile(jfileChooser.getSelectedFile(), null);
         if (result != JFileChooser.APPROVE_OPTION) {
             return;
         }
+        encryptedFile = new EncryptedFile(jfileChooser.getSelectedFile(), null);
         symmetricFileChooser.setText(encryptedFile.getFile().getName());
     }//GEN-LAST:event_symmetricFileChooserMousePressed
 

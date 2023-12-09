@@ -15,6 +15,9 @@ import javax.crypto.spec.SecretKeySpec;
  */
 
 public class AESCipher {
+    
+    private AESCipher() {
+    }
 
     public static Cipher get(String key, String saltPhase, int mode) throws Exception {
         byte[] iv = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};

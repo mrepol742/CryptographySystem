@@ -12,6 +12,9 @@ import javax.crypto.Cipher;
  */
 
 public class AESDecode {
+    
+    private AESDecode() {
+    }
 
     public static String get(String str, String key, String saltPhase) {
         try {

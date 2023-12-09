@@ -7,6 +7,9 @@ import java.util.Random;
  * @author mrepol742
  */
 public class RandomKey {
+    
+    private RandomKey() {
+    }
 
     public static String get(int length) {
         String upperAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

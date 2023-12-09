@@ -6,6 +6,10 @@ package com.mrepol742.cryptographysystem;
  */
 public class CeasarCipher {
     
+    private CeasarCipher() {
+        
+    }
+    
      public static String encode(String text, int s) {
         StringBuilder result = new StringBuilder();
         int length = text.length();

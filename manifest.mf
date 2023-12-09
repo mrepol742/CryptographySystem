@@ -1,5 +1,6 @@
 Manifest-Version: 1.0
 Created-by: Melvin Jones Repol
+Class-Path: lib/flatlaf-3.2.5.jar
 Country: PH
 Website: https://mrepol742.github.io
 SplashScreen-Image: src/com/mrepol742/cryptographysystem/icon.png
