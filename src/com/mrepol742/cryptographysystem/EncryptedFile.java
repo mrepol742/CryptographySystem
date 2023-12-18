@@ -20,20 +20,26 @@ public class EncryptedFile {
     public EncryptedFile(File selectedFile, String content) {
         this.selectedFile = selectedFile;
         this.content = content;
+        String[] split = selectedFile.getName().split("\\.");
+        fileFormat = split[split.length - 1];
         try {
-            mimetype = Files.probeContentType(selectedFile.toPath()).split("/")[0];
-            String[] split = selectedFile.getName().split("\\.");
-            fileFormat = split[split.length -1];
+            mimetype = Files.probeContentType(selectedFile.toPath());
+            if (mimetype != null) {
+                mimetype = mimetype.split("/")[0];
+            } else {
+                mimetype = "default";
+            }
             Logger.getLogger(Main.class.getName()).log(Level.INFO, "Selected File: {0}\nMimetype: {1}\nFile Format:{2}", new Object[]{selectedFile.getName(), mimetype, fileFormat});
         } catch (IOException ex) {
+            mimetype = "default";
             Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-    
+
     public File getFile() {
         return selectedFile;
     }
-    
+
     public String getContent() {
         return content;
     }
@@ -41,15 +47,15 @@ public class EncryptedFile {
     public String getMimetype() {
         return mimetype;
     }
-    
+
     public String getFileFormat(boolean isEncode) {
-      //if (isEncode) {
+        //if (isEncode) {
         return fileFormat;
-      /*}
+        /*}
         String[] filename = getFile().getName().replace(".enc", "").split("\\.");
         return filename[filename.length - 1].replace(".", ""); */
     }
-    
+
     public void setContent(String content) {
         this.content = content;
     }
